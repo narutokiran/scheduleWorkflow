@@ -5,16 +5,14 @@
         <jobsJar>/home/kiran/Desktop/testWorkflow.jar</jobsJar>
         <job>
             <jobName>WordCount</jobName>
-            <jobClass>test.WordCount.class</jobClass>
-            <mapperClass>test.Map.class</mapperClass>
-           <combinerClass>test.Reduce.class</combinerClass>
-           <reduceClass>test.Reduce.Class</reducerClass>
-           <inputFormatClass>TextInputFormat.class</inputFormatClass>
-           <outputFormatClass>TextOutputFormat.class</outputFormatClass>
-           <outputKeyClass>Text.class</outputKeyClass>
-           <outputValueClass>IntWritable.class</outputValueClass>
+            <jobClass>test.WordCount</jobClass>
+            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+           <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
+           <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
            <inputDir>hdfs://localhost:9000/user/kiran/wordcount/input</inputDir>
-           <outPutDir>hdfs://localhost:9000/user/kiran/wordcount/output</outputDir>
+           <outputDir>hdfs://localhost:9000/user/kiran/wordcount/output</outputDir>
         </job>
     </workflow>
 </workflows>
