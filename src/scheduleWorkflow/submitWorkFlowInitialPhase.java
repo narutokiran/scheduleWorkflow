@@ -18,10 +18,11 @@ import org.apache.hadoop.util.*;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.OutputFormat;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 
 import java.io.*;
 import java.util.*;
@@ -34,24 +35,42 @@ class WorkflowLookup
 	Class<?> jobClass;
 	Class<?> outputKeyClass;
 	Class<?> outputValueClass;
-	String inputDir;
-	String outputDir;
-	
-	void setInputDir(String val)
+	String inputPaths[]=new String[100];
+	String outputPath;
+	String status;
+	String jobName;
+	int inputPathsCount;
+	WorkflowLookup()
 	{
-		this.inputDir=val;
+		inputPathsCount=0;
 	}
-	String getInputDir()
+	int getInputPathsCount()
 	{
-		return this.inputDir;
+		return this.inputPathsCount;
 	}
-	void setOutputDir(String val)
+	void setJobName(String val)
 	{
-		this.outputDir=val;
+		this.jobName=val;
 	}
-	String getOutputDir()
+	String getJobName()
 	{
-		return this.outputDir;
+		return this.jobName;
+	}
+	void setInputPaths(String val)
+	{
+		this.inputPaths[inputPathsCount++]=val;
+	}
+	String getInputPaths(int val)
+	{
+		return this.inputPaths[val];
+	}
+	void setOutputPath(String val)
+	{
+		this.outputPath=val;
+	}
+	String getOutputPath()
+	{
+		return this.outputPath;
 	}
 	void setJobClass(String val) throws ClassNotFoundException
 	{
@@ -107,11 +126,19 @@ class WorkflowLookup
 	{
 		return this.reducerClass;
 	}
+	void setJobStatus(String val)
+	{
+		this.status=val;
+	}
+	String getJobStatus()
+	{
+		return this.status;
+	}
 }
 
 public class submitWorkFlowInitialPhase {
 
-	@SuppressWarnings({ "deprecation", "rawtypes", "unchecked" })
+	@SuppressWarnings({ "deprecation"})
 	public static void main(String args[])throws Exception
 	{
 		 try {
@@ -125,8 +152,6 @@ public class submitWorkFlowInitialPhase {
 				//read this - http://stackoverflow.com/questions/13786607/normalization-in-dom-parsing-with-java-how-does-it-work
 				doc.getDocumentElement().normalize();
 			 
-				System.out.println("Root element :" + doc.getDocumentElement().getNodeName());
-			 
 				NodeList workflowList = doc.getElementsByTagName("workflow");
 			 
 				for (int workflow = 0; workflow < workflowList.getLength(); workflow++) {
@@ -138,32 +163,54 @@ public class submitWorkFlowInitialPhase {
 						String workflowName=new String(workflowElement.getElementsByTagName("workflowName").item(0).getTextContent());
 						NodeList jobs=workflowElement.getElementsByTagName("job");
 						System.out.println(workflowName+" has submitted to YARN cluster");
-						for(int job=0;job<jobs.getLength();job++)
+						int jobLength=jobs.getLength();
+						WorkflowLookup jobLookUp[]=new WorkflowLookup[jobLength+2];
+						Job clientJob[]=new Job[jobLength+2];
+						for(int job=0;job<jobLength;job++)
 						{
+							jobLookUp[job]=new WorkflowLookup();
+							clientJob[job]=new Job(new Configuration());
 							Node jobDetail= jobs.item(job);
 							if(jobDetail.getNodeType() == Node.ELEMENT_NODE)
 							{
-								Job clientJob=new Job(new Configuration());
+								/* Parse XML and get the requirement value to run hadoop jobs in the YARN cluster */
 								Element jobElement= (Element) jobDetail;
-								String jobName=new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent());
-								Class<?> jobClass=Class.forName(new String(jobElement.getElementsByTagName("jobClass").item(0).getTextContent()));
-								clientJob.setJarByClass(jobClass);
-								Class<? extends Mapper> mapperClass=(Class<? extends Mapper>)Class.forName(new String(jobElement.getElementsByTagName("mapperClass").item(0).getTextContent()));
-								Class<? extends Reducer> reducerClass=(Class<? extends Reducer>)Class.forName(new String(jobElement.getElementsByTagName("reducerClass").item(0).getTextContent()));
-								Class<? extends Reducer> combinerClass=(Class<? extends Reducer>)Class.forName(new String(jobElement.getElementsByTagName("combinerClass").item(0).getTextContent()));
-								Class<?> outputKeyClass=Class.forName(new String(jobElement.getElementsByTagName("outputKeyClass").item(0).getTextContent()));
-								Class<?> outputValueClass=Class.forName(new String(jobElement.getElementsByTagName("outputValueClass").item(0).getTextContent()));
-								String inputDir=new String(jobElement.getElementsByTagName("inputDir").item(0).getTextContent());
-								String outputDir=new String(jobElement.getElementsByTagName("outputDir").item(0).getTextContent());
-								clientJob.setJobName(jobName);
-								clientJob.setOutputKeyClass(outputKeyClass);
-								clientJob.setOutputValueClass(outputValueClass);
-								clientJob.setMapperClass(mapperClass);
-								clientJob.setCombinerClass(combinerClass);
-								clientJob.setReducerClass(reducerClass);
-								FileInputFormat.addInputPath(clientJob, new Path(inputDir));
-								FileOutputFormat.setOutputPath(clientJob, new Path(outputDir));
-								clientJob.waitForCompletion(true);
+								jobLookUp[job].setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+								jobLookUp[job].setJobClass(new String(jobElement.getElementsByTagName("jobClass").item(0).getTextContent()));	
+								jobLookUp[job].setMapperClass(new String(jobElement.getElementsByTagName("mapperClass").item(0).getTextContent()));
+								jobLookUp[job].setReducerClass(new String(jobElement.getElementsByTagName("reducerClass").item(0).getTextContent()));
+								jobLookUp[job].setCombinerClass(new String(jobElement.getElementsByTagName("combinerClass").item(0).getTextContent()));
+								jobLookUp[job].setOutputKeyClass(new String(jobElement.getElementsByTagName("outputKeyClass").item(0).getTextContent()));
+								jobLookUp[job].setOutputValueClass(new String(jobElement.getElementsByTagName("outputValueClass").item(0).getTextContent()));
+								NodeList inputPaths=jobElement.getElementsByTagName("inputPaths");
+								Node inputPathsDetail=inputPaths.item(0);
+								Element inputPathsElement=(Element) inputPathsDetail;
+								NodeList inputPath=inputPathsElement.getElementsByTagName("input");
+								for(int input=0;input<inputPath.getLength();input++)
+								{
+									Node inputPathDetail=inputPath.item(input);
+									Element inputPathElement=(Element) inputPathDetail;
+									jobLookUp[job].setInputPaths(new String(inputPathElement.getElementsByTagName("path").item(0).getTextContent()));
+								}
+									jobLookUp[job].setOutputPath(new String(jobElement.getElementsByTagName("outputPath").item(0).getTextContent()));
+								
+								/*Submitting the job to YARN Cluster*/
+								clientJob[job].setJobName(jobLookUp[job].getJobName());
+								clientJob[job].setJarByClass(jobLookUp[job].getJobClass());
+								clientJob[job].setOutputKeyClass(jobLookUp[job].getOutputKeyClass());
+								clientJob[job].setOutputValueClass(jobLookUp[job].getOutputvalueClass());
+								clientJob[job].setMapperClass(jobLookUp[job].getMapperClass());
+								clientJob[job].setCombinerClass(jobLookUp[job].getCombinerClass());
+								clientJob[job].setReducerClass(jobLookUp[job].getReducerClass());
+								String inputs="";
+								for(int input=0;input<jobLookUp[job].getInputPathsCount()-1;input++)
+									inputs+=jobLookUp[job].getInputPaths(input)+",";
+								inputs+=jobLookUp[job].getInputPaths(jobLookUp[job].getInputPathsCount()-1);
+								FileInputFormat.addInputPaths(clientJob[job], inputs);
+								FileOutputFormat.setOutputPath(clientJob[job], new Path(jobLookUp[job].getOutputPath()));
+								jobLookUp[job].setJobStatus("Submitted");
+								clientJob[job].submit();
+								System.out.println("hi");
 							}
 						}
 						

@@ -10,8 +10,29 @@
            <reducerClass>test.WordCount$IntSumReducer</reducerClass>
            <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
            <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
-           <inputDir>hdfs://localhost:9000/user/kiran/wordcount/input</inputDir>
-           <outputDir>hdfs://localhost:9000/user/kiran/wordcount/output</outputDir>
+           <inputPaths>
+                    <input>
+                        <path>hdfs://localhost:9000/user/kiran/wordcount/input1</path>
+                    </input>
+           </inputPaths>
+           <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output1</outputPath>
+           <predecessor></predecessor>
+        </job>
+        <job>
+            <jobName>WordCount-1</jobName>
+            <jobClass>test.WordCount</jobClass>
+            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+           <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
+           <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
+           <inputPaths>
+                    <input>
+                        <path>hdfs://localhost:9000/user/kiran/wordcount/input2</path>
+                    </input>
+           </inputPaths>
+           <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output2</outputPath>
+           <predecessor></predecessor>
         </job>
     </workflow>
 </workflows>
