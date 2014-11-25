@@ -36,17 +36,43 @@ class WorkflowLookup
 	Class<?> outputKeyClass;
 	Class<?> outputValueClass;
 	String inputPaths[]=new String[100];
+	String predecessor[]=new String[1000];
+	String successor[]=new String[1000];
 	String outputPath;
 	String status;
 	String jobName;
-	int inputPathsCount;
+	int inputPathsCount,predecessorCount,successorCount;
 	WorkflowLookup()
 	{
-		inputPathsCount=0;
+		inputPathsCount=0;predecessorCount=0;successorCount=0;status="Initialize";
+	}
+	int getPredecessorCount()
+	{
+		return this.predecessorCount;
+	}
+	int getSuccessorCount()
+	{
+		return this.successorCount;
 	}
 	int getInputPathsCount()
 	{
 		return this.inputPathsCount;
+	}
+	void setPredecessor(String val)
+	{
+		this.predecessor[this.predecessorCount++]=val;
+	}
+	String getPredecessor(int val)
+	{
+		return this.predecessor[val];
+	}
+	String getSuccessor(int val)
+	{
+		return this.successor[val];
+	}
+	void setSuccessor(String val)
+	{
+		this.successor[this.successorCount++]=val;
 	}
 	void setJobName(String val)
 	{
@@ -193,26 +219,173 @@ public class submitWorkFlowInitialPhase {
 									jobLookUp[job].setInputPaths(new String(inputPathElement.getElementsByTagName("path").item(0).getTextContent()));
 								}
 									jobLookUp[job].setOutputPath(new String(jobElement.getElementsByTagName("outputPath").item(0).getTextContent()));
-								
-								/*Submitting the job to YARN Cluster*/
-								clientJob[job].setJobName(jobLookUp[job].getJobName());
-								clientJob[job].setJarByClass(jobLookUp[job].getJobClass());
-								clientJob[job].setOutputKeyClass(jobLookUp[job].getOutputKeyClass());
-								clientJob[job].setOutputValueClass(jobLookUp[job].getOutputvalueClass());
-								clientJob[job].setMapperClass(jobLookUp[job].getMapperClass());
-								clientJob[job].setCombinerClass(jobLookUp[job].getCombinerClass());
-								clientJob[job].setReducerClass(jobLookUp[job].getReducerClass());
-								String inputs="";
-								for(int input=0;input<jobLookUp[job].getInputPathsCount()-1;input++)
-									inputs+=jobLookUp[job].getInputPaths(input)+",";
-								inputs+=jobLookUp[job].getInputPaths(jobLookUp[job].getInputPathsCount()-1);
-								FileInputFormat.addInputPaths(clientJob[job], inputs);
-								FileOutputFormat.setOutputPath(clientJob[job], new Path(jobLookUp[job].getOutputPath()));
-								jobLookUp[job].setJobStatus("Submitted");
-								clientJob[job].submit();
-								System.out.println("hi");
+								String predecessorSet=new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+								if(predecessorSet!=null)
+								{
+									String predecessors[]=predecessorSet.split(",");
+									for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+										jobLookUp[job].setPredecessor(predecessors[predecessor]);
+								}
 							}
 						}
+						for(int job=0;job<jobLength;job++)
+						{
+							for(int successor=0;successor<jobLength;successor++)
+							{
+								if(job!=successor)
+								{
+									for(int predecessor=0;predecessor<jobLookUp[successor].getPredecessorCount();predecessor++)
+									{
+										if((jobLookUp[successor].getPredecessor(predecessor)).equals(jobLookUp[job].getJobName()))
+										{
+											jobLookUp[job].setSuccessor(jobLookUp[successor].getJobName());
+											break;
+										}
+									}
+								}
+							}
+						}
+						/*Find root jobs */
+						String rootJobs[]=new String[jobLength+2];
+						int rootJobCount=0;
+						for(int job=0;job<jobLength;job++)
+						{
+							if(jobLookUp[job].getPredecessorCount()==0)
+							{
+								rootJobs[rootJobCount++]=jobLookUp[job].getJobName();
+							}
+						}
+						
+						/*Submitting root jobs to YARN cluster and adding successor jobs to the WaitQueue */
+						ArrayList<String> waitQueue=new ArrayList<String>();
+						for(int rootJob=0;rootJob<rootJobCount;rootJob++)
+						{
+							int jobIndex=-1;
+							for(int job=0;job<jobLength;job++)
+							{
+								if(jobLookUp[job].getJobName().equals(rootJobs[rootJob]))
+								{
+									jobIndex=job;
+									break;
+								}
+							}
+							if(jobIndex!=-1){
+								/*Add successors to the wait Queue */
+								for(int successor=0;successor<jobLookUp[jobIndex].getSuccessorCount();successor++)
+								{
+									if(waitQueue.indexOf(jobLookUp[jobIndex].getSuccessor(successor))==-1)
+									{
+										waitQueue.add(jobLookUp[jobIndex].getSuccessor(successor));
+									}
+								}
+								/*Submit a job to YARN cluster */
+								clientJob[jobIndex].setJobName(jobLookUp[jobIndex].getJobName());
+								clientJob[jobIndex].setJarByClass(jobLookUp[jobIndex].getJobClass());
+								clientJob[jobIndex].setOutputKeyClass(jobLookUp[jobIndex].getOutputKeyClass());
+								clientJob[jobIndex].setOutputValueClass(jobLookUp[jobIndex].getOutputvalueClass());
+								clientJob[jobIndex].setMapperClass(jobLookUp[jobIndex].getMapperClass());
+								clientJob[jobIndex].setCombinerClass(jobLookUp[jobIndex].getCombinerClass());
+								clientJob[jobIndex].setReducerClass(jobLookUp[jobIndex].getReducerClass());
+								String inputs="";
+								for(int input=0;input<jobLookUp[jobIndex].getInputPathsCount()-1;input++)
+									inputs+=jobLookUp[jobIndex].getInputPaths(input)+",";
+								inputs+=jobLookUp[jobIndex].getInputPaths(jobLookUp[jobIndex].getInputPathsCount()-1);
+								FileInputFormat.addInputPaths(clientJob[jobIndex], inputs);
+								FileOutputFormat.setOutputPath(clientJob[jobIndex], new Path(jobLookUp[jobIndex].getOutputPath()));
+								jobLookUp[jobIndex].setJobStatus("Submitted");
+								clientJob[jobIndex].submit();
+								System.out.println("Submitted "+jobLookUp[jobIndex].getJobName()+" to the YARN cluster");
+							}
+						}
+						/*Submitting pending jobs to YARN cluster */
+						while(waitQueue.size()!=0)
+						{
+							for(int waitJob=0;waitJob<waitQueue.size();waitJob++)
+							{
+								/*flag variable to check all predecessor jobs are completed */
+								int flag=0;
+								int jobIndex=-1;
+								/*finding job index of the current pending job */
+								for(int job=0;job<jobLength;job++)
+								{
+									if(jobLookUp[job].getJobName().equals(waitQueue.get(waitJob)))
+									{
+										jobIndex=job;
+										break;
+									}
+								}
+								if(jobIndex!=-1)
+								{
+									for(int predecessor=0;predecessor<jobLookUp[jobIndex].getPredecessorCount();predecessor++)
+									{
+										int predecessorIndex=-1;
+										/*find the predecessor job index of the current pending job */
+										for(int job=0;job<jobLength;job++)
+										{
+											if(jobLookUp[job].getJobName().equals(jobLookUp[jobIndex].getPredecessor(predecessor)))
+											{
+												predecessorIndex=job;
+												break;
+											}
+										}
+										if(predecessorIndex!=-1)
+										{
+											/*check if all predecessors are submitted and completed */
+											if(jobLookUp[predecessorIndex].getJobStatus().equals("Submitted") && clientJob[predecessorIndex].isComplete())
+											{
+												jobLookUp[predecessorIndex].setJobStatus("Completed");
+											}
+											else
+											{
+												flag=1;
+												break;
+											}
+										}
+									}
+								}
+								/*if all predecessors are submitted and completed the submit the current pending job to YARN cluster and remove it from the waitQueue */
+								if(flag==0)
+								{
+									for(int successor=0;successor<jobLookUp[jobIndex].getSuccessorCount();successor++)
+									{
+										if(waitQueue.indexOf(jobLookUp[jobIndex].getSuccessor(successor))==-1)
+										{
+											waitQueue.add(jobLookUp[jobIndex].getSuccessor(successor));
+										}
+									}
+									waitQueue.remove(jobLookUp[jobIndex].getJobName());
+									clientJob[jobIndex].setJobName(jobLookUp[jobIndex].getJobName());
+									clientJob[jobIndex].setJarByClass(jobLookUp[jobIndex].getJobClass());
+									clientJob[jobIndex].setOutputKeyClass(jobLookUp[jobIndex].getOutputKeyClass());
+									clientJob[jobIndex].setOutputValueClass(jobLookUp[jobIndex].getOutputvalueClass());
+									clientJob[jobIndex].setMapperClass(jobLookUp[jobIndex].getMapperClass());
+									clientJob[jobIndex].setCombinerClass(jobLookUp[jobIndex].getCombinerClass());
+									clientJob[jobIndex].setReducerClass(jobLookUp[jobIndex].getReducerClass());
+									String inputs="";
+									for(int input=0;input<jobLookUp[jobIndex].getInputPathsCount()-1;input++)
+										inputs+=jobLookUp[jobIndex].getInputPaths(input)+",";
+									inputs+=jobLookUp[jobIndex].getInputPaths(jobLookUp[jobIndex].getInputPathsCount()-1);
+									FileInputFormat.addInputPaths(clientJob[jobIndex], inputs);
+									FileOutputFormat.setOutputPath(clientJob[jobIndex], new Path(jobLookUp[jobIndex].getOutputPath()));
+									jobLookUp[jobIndex].setJobStatus("Submitted");
+									clientJob[jobIndex].submit();
+									System.out.println("Submitted "+jobLookUp[jobIndex].getJobName()+" to the YARN cluster");
+								}
+							}
+						}
+						
+						/* Print successor and predecessor */
+						/*for(int job=0;job<jobLength;job++)
+						{
+							System.out.println("Predecessor of job -"+jobLookUp[job].getJobName());
+							for(int predecessor=0;predecessor<jobLookUp[job].getPredecessorCount();predecessor++)
+								System.out.print(jobLookUp[job].getPredecessor(predecessor)+" ");
+							System.out.println();
+							System.out.println("Successor of job -"+jobLookUp[job].getJobName());
+							for(int successor=0;successor<jobLookUp[job].getSuccessorCount();successor++)
+								System.out.print(jobLookUp[job].getSuccessor(successor)+" ");
+							System.out.println();
+						}*/
 						
 					}
 				}

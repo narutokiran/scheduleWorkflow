@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <workflows>
     <workflow>
-        <workflowName>sample workflow 1</workflowName>
+        <workflowName>sampleWorkflow-1</workflowName>
         <job>
             <jobName>WordCount</jobName>
             <jobClass>test.WordCount</jobClass>
@@ -33,6 +33,25 @@
            </inputPaths>
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output2</outputPath>
            <predecessor></predecessor>
+        </job>
+        <job>
+            <jobName>WordCount-2</jobName>
+            <jobClass>test.WordCount2</jobClass>
+            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+           <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
+           <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
+           <inputPaths>
+                    <input>
+                        <path>hdfs://localhost:9000/user/kiran/wordcount/output1/part-r-00000</path>
+                    </input>
+                    <input>
+                        <path>hdfs://localhost:9000/user/kiran/wordcount/output2/part-r-00000</path>
+                    </input>
+           </inputPaths>
+           <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output2</outputPath>
+           <predecessor>WordCount,WordCount-1</predecessor>
         </job>
     </workflow>
 </workflows>
