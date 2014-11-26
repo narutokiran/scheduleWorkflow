@@ -69,9 +69,9 @@
         <job>
             <jobName>WordCountJoin-1</jobName>
             <jobClass>test.WordCount2</jobClass>
-            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
-           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
-           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+            <mapperClass>test.WordCount2$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount2$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount2$IntSumReducer</reducerClass>
            <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
            <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
            <inputPaths>
@@ -88,9 +88,9 @@
         <job>
             <jobName>WordCountJoin-2</jobName>
             <jobClass>test.WordCount2</jobClass>
-            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
-           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
-           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+            <mapperClass>test.WordCount2$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount2$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount2$IntSumReducer</reducerClass>
            <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
            <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
            <inputPaths>
@@ -107,9 +107,9 @@
         <job>
             <jobName>WordCountJoin-3</jobName>
             <jobClass>test.WordCount2</jobClass>
-            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
-           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
-           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+            <mapperClass>test.WordCount2$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount2$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount2$IntSumReducer</reducerClass>
            <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
            <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
            <inputPaths>
