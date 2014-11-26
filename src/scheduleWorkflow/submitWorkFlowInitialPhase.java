@@ -164,6 +164,8 @@ class WorkflowLookup
 
 public class submitWorkFlowInitialPhase {
 
+	private static String predecessorSet;
+
 	@SuppressWarnings({ "deprecation"})
 	public static void main(String args[])throws Exception
 	{
@@ -219,10 +221,14 @@ public class submitWorkFlowInitialPhase {
 									jobLookUp[job].setInputPaths(new String(inputPathElement.getElementsByTagName("path").item(0).getTextContent()));
 								}
 									jobLookUp[job].setOutputPath(new String(jobElement.getElementsByTagName("outputPath").item(0).getTextContent()));
-								String predecessorSet=new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
-								if(predecessorSet!=null)
+								predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+								predecessorSet=predecessorSet.trim();
+								//System.out.println(predecessorSet.isEmpty());
+								if(predecessorSet!=null && !predecessorSet.isEmpty())
 								{
+									
 									String predecessors[]=predecessorSet.split(",");
+									//System.out.println(predecessors[0]);
 									for(int predecessor=0;predecessor<predecessors.length;predecessor++)
 										jobLookUp[job].setPredecessor(predecessors[predecessor]);
 								}
@@ -245,14 +251,29 @@ public class submitWorkFlowInitialPhase {
 								}
 							}
 						}
+						/* Print successor and predecessor */
+						/*for(int job=0;job<jobLength;job++)
+						{
+							System.out.println("Predecessor of job -"+jobLookUp[job].getJobName());
+							for(int predecessor=0;predecessor<jobLookUp[job].getPredecessorCount();predecessor++)
+								System.out.print(jobLookUp[job].getPredecessor(predecessor)+" ");
+							System.out.println();
+							System.out.println("Successor of job -"+jobLookUp[job].getJobName());
+							for(int successor=0;successor<jobLookUp[job].getSuccessorCount();successor++)
+								System.out.print(jobLookUp[job].getSuccessor(successor)+" ");
+							System.out.println();
+						}*/
+						
 						/*Find root jobs */
 						String rootJobs[]=new String[jobLength+2];
 						int rootJobCount=0;
 						for(int job=0;job<jobLength;job++)
 						{
+							//System.out.println(jobLookUp[job].getPredecessorCount());
 							if(jobLookUp[job].getPredecessorCount()==0)
 							{
 								rootJobs[rootJobCount++]=jobLookUp[job].getJobName();
+								//System.out.println(jobLookUp[job].getJobName());
 							}
 						}
 						
@@ -266,6 +287,7 @@ public class submitWorkFlowInitialPhase {
 								if(jobLookUp[job].getJobName().equals(rootJobs[rootJob]))
 								{
 									jobIndex=job;
+									//System.out.println(jobIndex);
 									break;
 								}
 							}
@@ -294,7 +316,7 @@ public class submitWorkFlowInitialPhase {
 								FileOutputFormat.setOutputPath(clientJob[jobIndex], new Path(jobLookUp[jobIndex].getOutputPath()));
 								jobLookUp[jobIndex].setJobStatus("Submitted");
 								clientJob[jobIndex].submit();
-								System.out.println("Submitted "+jobLookUp[jobIndex].getJobName()+" to the YARN cluster");
+								System.out.println("Submitted "+jobLookUp[jobIndex].getJobName()+" job to the YARN cluster");
 							}
 						}
 						/*Submitting pending jobs to YARN cluster */
@@ -318,6 +340,7 @@ public class submitWorkFlowInitialPhase {
 								{
 									for(int predecessor=0;predecessor<jobLookUp[jobIndex].getPredecessorCount();predecessor++)
 									{
+										//System.out.println(predecessor+"-"+jobLookUp[jobIndex].getPredecessor(predecessor));
 										int predecessorIndex=-1;
 										/*find the predecessor job index of the current pending job */
 										for(int job=0;job<jobLength;job++)
@@ -325,14 +348,16 @@ public class submitWorkFlowInitialPhase {
 											if(jobLookUp[job].getJobName().equals(jobLookUp[jobIndex].getPredecessor(predecessor)))
 											{
 												predecessorIndex=job;
+												//System.out.println(jobIndex+"-"+predecessorIndex+"-"+jobLookUp[jobIndex].getPredecessorCount());
 												break;
 											}
 										}
 										if(predecessorIndex!=-1)
 										{
 											/*check if all predecessors are submitted and completed */
-											if(jobLookUp[predecessorIndex].getJobStatus().equals("Submitted") && clientJob[predecessorIndex].isComplete())
+											if(!jobLookUp[predecessorIndex].getJobStatus().equals("Initialize") && clientJob[predecessorIndex].isComplete())
 											{
+												//System.out.println(predecessorIndex+" is completed");
 												jobLookUp[predecessorIndex].setJobStatus("Completed");
 											}
 											else
@@ -369,23 +394,14 @@ public class submitWorkFlowInitialPhase {
 									FileOutputFormat.setOutputPath(clientJob[jobIndex], new Path(jobLookUp[jobIndex].getOutputPath()));
 									jobLookUp[jobIndex].setJobStatus("Submitted");
 									clientJob[jobIndex].submit();
-									System.out.println("Submitted "+jobLookUp[jobIndex].getJobName()+" to the YARN cluster");
+									System.out.println("Submitted "+jobLookUp[jobIndex].getJobName()+" job to the YARN cluster");
 								}
 							}
+							//if(clientJob[3].isComplete())
+							//System.out.println(waitQueue);
 						}
 						
-						/* Print successor and predecessor */
-						/*for(int job=0;job<jobLength;job++)
-						{
-							System.out.println("Predecessor of job -"+jobLookUp[job].getJobName());
-							for(int predecessor=0;predecessor<jobLookUp[job].getPredecessorCount();predecessor++)
-								System.out.print(jobLookUp[job].getPredecessor(predecessor)+" ");
-							System.out.println();
-							System.out.println("Successor of job -"+jobLookUp[job].getJobName());
-							for(int successor=0;successor<jobLookUp[job].getSuccessorCount();successor++)
-								System.out.print(jobLookUp[job].getSuccessor(successor)+" ");
-							System.out.println();
-						}*/
+						
 						
 					}
 				}
