@@ -2,7 +2,7 @@
 <workflows>
     <workflow>
         <workflowName>sampleWorkflow-1</workflowName>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCount-1</jobName>
             <jobClass>test.WordCount</jobClass>
             <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
@@ -18,7 +18,7 @@
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output1</outputPath>
            <predecessor></predecessor>
         </job>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCount-2</jobName>
             <jobClass>test.WordCount</jobClass>
             <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
@@ -34,7 +34,7 @@
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output2</outputPath>
            <predecessor></predecessor>
         </job>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCount-3</jobName>
             <jobClass>test.WordCount</jobClass>
             <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
@@ -50,7 +50,7 @@
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output3</outputPath>
            <predecessor></predecessor>
         </job>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCount-4</jobName>
             <jobClass>test.WordCount</jobClass>
             <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
@@ -66,7 +66,7 @@
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output4</outputPath>
            <predecessor></predecessor>
         </job>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCountJoin-1</jobName>
             <jobClass>test.WordCount2</jobClass>
             <mapperClass>test.WordCount2$TokenizerMapper</mapperClass>
@@ -85,7 +85,7 @@
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output5</outputPath>
            <predecessor>WordCount-1,WordCount-2</predecessor>
         </job>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCountJoin-2</jobName>
             <jobClass>test.WordCount2</jobClass>
             <mapperClass>test.WordCount2$TokenizerMapper</mapperClass>
@@ -104,7 +104,7 @@
            <outputPath>hdfs://localhost:9000/user/kiran/wordcount/output6</outputPath>
            <predecessor>WordCount-3,WordCount-4</predecessor>
         </job>
-        <job>
+        <job type="HadoopMR">
             <jobName>WordCountJoin-3</jobName>
             <jobClass>test.WordCount2</jobClass>
             <mapperClass>test.WordCount2$TokenizerMapper</mapperClass>

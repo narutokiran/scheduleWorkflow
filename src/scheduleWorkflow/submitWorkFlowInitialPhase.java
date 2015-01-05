@@ -3,6 +3,7 @@ package scheduleWorkflow;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 
+import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Node;
@@ -42,10 +43,13 @@ class WorkflowLookup
 	String outputPath;
 	String status;
 	String jobName;
+	String jobType;
+	Job clientJob;
 	int inputPathsCount,predecessorCount,successorCount;
-	WorkflowLookup()
+	@SuppressWarnings("deprecation")
+	WorkflowLookup()throws IOException
 	{
-		inputPathsCount=0;predecessorCount=0;successorCount=0;status="Initialize";
+		inputPathsCount=0;predecessorCount=0;successorCount=0;status="Initialize";clientJob=new Job(new Configuration());
 	}
 	int getPredecessorCount()
 	{
@@ -161,24 +165,77 @@ class WorkflowLookup
 	{
 		return this.status;
 	}
-	void submitHadoopMRJob(Job clientJob) throws IOException, ClassNotFoundException, InterruptedException
+	void setJobType(String val)
 	{
-		clientJob.setJobName(this.getJobName());
-		clientJob.setJarByClass(this.getJobClass());
-		clientJob.setOutputKeyClass(this.getOutputKeyClass());
-		clientJob.setOutputValueClass(this.getOutputvalueClass());
-		clientJob.setMapperClass(this.getMapperClass());
-		clientJob.setCombinerClass(this.getCombinerClass());
-		clientJob.setReducerClass(this.getReducerClass());
-		String inputs="";
-		for(int input=0;input<this.getInputPathsCount()-1;input++)
-			inputs+=this.getInputPaths(input)+",";
-		inputs+=this.getInputPaths(this.getInputPathsCount()-1);
-		FileInputFormat.addInputPaths(clientJob, inputs);
-		FileOutputFormat.setOutputPath(clientJob, new Path(this.getOutputPath()));
-		this.setJobStatus("Submitted");
-		clientJob.submit();
-		System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		this.jobType=val;
+	}
+	String getJobType()
+	{
+		return this.jobType;
+	}
+	void submitJob() throws IOException, ClassNotFoundException, InterruptedException
+	{
+		if(this.jobType.equals("HadoopMR"))
+		{
+			this.clientJob.setJobName(this.getJobName());
+			this.clientJob.setJarByClass(this.getJobClass());
+			this.clientJob.setOutputKeyClass(this.getOutputKeyClass());
+			this.clientJob.setOutputValueClass(this.getOutputvalueClass());
+			this.clientJob.setMapperClass(this.getMapperClass());
+			this.clientJob.setCombinerClass(this.getCombinerClass());
+			this.clientJob.setReducerClass(this.getReducerClass());
+			String inputs="";
+			for(int input=0;input<this.getInputPathsCount()-1;input++)
+				inputs+=this.getInputPaths(input)+",";
+			inputs+=this.getInputPaths(this.getInputPathsCount()-1);
+			FileInputFormat.addInputPaths(this.clientJob, inputs);
+			FileOutputFormat.setOutputPath(this.clientJob, new Path(this.getOutputPath()));
+			this.setJobStatus("Submitted");
+			this.clientJob.submit();
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+	}
+	void parseXML(Node jobDetail) throws ClassNotFoundException, DOMException
+	{
+		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("HadoopMR"))
+		{
+			/* Parse XML and get the requirement value to run Hadoop jobs in the YARN cluster */
+			Element jobElement= (Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			this.setJobClass(new String(jobElement.getElementsByTagName("jobClass").item(0).getTextContent()));	
+			this.setMapperClass(new String(jobElement.getElementsByTagName("mapperClass").item(0).getTextContent()));
+			this.setReducerClass(new String(jobElement.getElementsByTagName("reducerClass").item(0).getTextContent()));
+			this.setCombinerClass(new String(jobElement.getElementsByTagName("combinerClass").item(0).getTextContent()));
+			this.setOutputKeyClass(new String(jobElement.getElementsByTagName("outputKeyClass").item(0).getTextContent()));
+			this.setOutputValueClass(new String(jobElement.getElementsByTagName("outputValueClass").item(0).getTextContent()));
+			NodeList inputPaths=jobElement.getElementsByTagName("inputPaths");
+			Node inputPathsDetail=inputPaths.item(0);
+			Element inputPathsElement=(Element) inputPathsDetail;
+			NodeList inputPath=inputPathsElement.getElementsByTagName("input");
+			for(int input=0;input<inputPath.getLength();input++)
+			{
+				Node inputPathDetail=inputPath.item(input);
+				Element inputPathElement=(Element) inputPathDetail;
+				this.setInputPaths(new String(inputPathElement.getElementsByTagName("path").item(0).getTextContent()));
+			}
+			this.setOutputPath(new String(jobElement.getElementsByTagName("outputPath").item(0).getTextContent()));
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			//System.out.println(predecessorSet.isEmpty());
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				//System.out.println(predecessors[0]);
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+		}
+	}
+	boolean isJobComplete() throws IOException
+	{
+		if(this.jobType.equals("HadoopMR") && !this.getJobStatus().equals("Initialize") && this.clientJob.isComplete())
+			return true;
+		return false;
 	}
 }
 
@@ -213,46 +270,13 @@ public class submitWorkFlowInitialPhase {
 						System.out.println(workflowName+" has submitted to YARN cluster");
 						int jobLength=jobs.getLength();
 						WorkflowLookup jobLookUp[]=new WorkflowLookup[jobLength+2];
-						Job clientJob[]=new Job[jobLength+2];
 						for(int job=0;job<jobLength;job++)
 						{
 							jobLookUp[job]=new WorkflowLookup();
-							clientJob[job]=new Job(new Configuration());
 							Node jobDetail= jobs.item(job);
-							if(jobDetail.getNodeType() == Node.ELEMENT_NODE)
-							{
-								/* Parse XML and get the requirement value to run Hadoop jobs in the YARN cluster */
-								Element jobElement= (Element) jobDetail;
-								jobLookUp[job].setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
-								jobLookUp[job].setJobClass(new String(jobElement.getElementsByTagName("jobClass").item(0).getTextContent()));	
-								jobLookUp[job].setMapperClass(new String(jobElement.getElementsByTagName("mapperClass").item(0).getTextContent()));
-								jobLookUp[job].setReducerClass(new String(jobElement.getElementsByTagName("reducerClass").item(0).getTextContent()));
-								jobLookUp[job].setCombinerClass(new String(jobElement.getElementsByTagName("combinerClass").item(0).getTextContent()));
-								jobLookUp[job].setOutputKeyClass(new String(jobElement.getElementsByTagName("outputKeyClass").item(0).getTextContent()));
-								jobLookUp[job].setOutputValueClass(new String(jobElement.getElementsByTagName("outputValueClass").item(0).getTextContent()));
-								NodeList inputPaths=jobElement.getElementsByTagName("inputPaths");
-								Node inputPathsDetail=inputPaths.item(0);
-								Element inputPathsElement=(Element) inputPathsDetail;
-								NodeList inputPath=inputPathsElement.getElementsByTagName("input");
-								for(int input=0;input<inputPath.getLength();input++)
-								{
-									Node inputPathDetail=inputPath.item(input);
-									Element inputPathElement=(Element) inputPathDetail;
-									jobLookUp[job].setInputPaths(new String(inputPathElement.getElementsByTagName("path").item(0).getTextContent()));
-								}
-									jobLookUp[job].setOutputPath(new String(jobElement.getElementsByTagName("outputPath").item(0).getTextContent()));
-								predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
-								predecessorSet=predecessorSet.trim();
-								//System.out.println(predecessorSet.isEmpty());
-								if(predecessorSet!=null && !predecessorSet.isEmpty())
-								{
-									
-									String predecessors[]=predecessorSet.split(",");
-									//System.out.println(predecessors[0]);
-									for(int predecessor=0;predecessor<predecessors.length;predecessor++)
-										jobLookUp[job].setPredecessor(predecessors[predecessor]);
-								}
-							}
+							String jobType=jobDetail.getAttributes().getNamedItem("type").getNodeValue();
+							jobLookUp[job].setJobType(jobType);
+							jobLookUp[job].parseXML(jobDetail);
 						}
 						for(int job=0;job<jobLength;job++)
 						{
@@ -309,7 +333,7 @@ public class submitWorkFlowInitialPhase {
 									}
 								}
 								/*Submit a job to YARN cluster */
-								jobLookUp[jobIndex].submitHadoopMRJob(clientJob[jobIndex]);
+								jobLookUp[jobIndex].submitJob();
 							}
 						}
 						/*Submitting pending jobs to YARN cluster */
@@ -347,12 +371,9 @@ public class submitWorkFlowInitialPhase {
 										}
 										if(predecessorIndex!=-1)
 										{
-											/*check if all predecessors are submitted and completed */
-											if(!jobLookUp[predecessorIndex].getJobStatus().equals("Initialize") && clientJob[predecessorIndex].isComplete())
-											{
-												//System.out.println(predecessorIndex+" is completed");
+											if(jobLookUp[predecessorIndex].isJobComplete())
 												jobLookUp[predecessorIndex].setJobStatus("Completed");
-											}
+											/*check if all predecessors are submitted and completed */
 											else
 											{
 												flag=1;
@@ -372,7 +393,7 @@ public class submitWorkFlowInitialPhase {
 										}
 									}
 									waitQueue.remove(jobLookUp[jobIndex].getJobName());
-									jobLookUp[jobIndex].submitHadoopMRJob(clientJob[jobIndex]);
+									jobLookUp[jobIndex].submitJob();
 								}
 							}
 						}		
