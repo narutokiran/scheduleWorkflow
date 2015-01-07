@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflows>
+    <workflow>
+        <workflowName>MahoutNaiveBayesClassification</workflowName>
+        <!--<job type="MahoutSeqDirectory">
+        	<jobName>MahoutSequenceDirectory</jobName>
+        	<input>/user/kiran/Mahout/20news-bydate-train</input>
+        	<output>/user/kiran/Mahout/20news-seq</output>
+        	<predecessor></predecessor>
+        </job>
+       <job type="MahoutSeq2Sparse">
+        	<jobName>MahoutSequence2Sparse</jobName>
+        	<input>/user/kiran/Mahout/20news-seq</input>
+        	<output>/user/kiran/Mahout/20news-vectors</output>
+        	<weight>tfidf</weight>
+        	<predecessor></predecessor>
+        </job>-->
+        <job type="MahoutSplit">
+        	<jobName>MahoutDatasetSplit</jobName>
+        	<input>/user/kiran/Mahout/20news-vectors/tfidf-vectors</input>
+        	<trainingOutput>/user/kiran/Mahout/20news-train-vectors</trainingOutput>
+        	<testOutput>/user/kiran/Mahout/20news-test-vectors</testOutput>
+        	<randomSelectionPct>40</randomSelectionPct>
+        	<xm>sequential</xm>
+        	<predecessor></predecessor>
+        </job>
+        <!--<job type="MahoutTrainNB">
+        	<jobName>MahoutTrainNaiveBayes</jobName>
+        	<input>/user/kiran/Mahout/20news-train-vectors</input>
+        	<output>/user/kiran/Mahout/model</output>
+        	<labelIndex>/user/kiran/Mahout/labelindex</labelIndex>
+        	<predecessor>MahoutDatasetSplit</predecessor>
+        </job>
+        <job type="MahoutTestNB">
+        	<jobName>MahoutTestNaiveBayes</jobName>
+        	<input>/user/kiran/Mahout/20news-test-vectors</input>
+        	<model>/user/kiran/Mahout/model</model>
+        	<labelIndex>/user/kiran/Mahout/labelindex</labelIndex>
+        	<output>/user/kiran/Mahout/20news-testing</output>
+        	<predecessor>MahoutTrainNaiveBayes</predecessor>
+        </job>
+        <job type="MahoutSeqDumper">
+        	<jobName>MahoutSequenceDumper</jobName>
+        	<input>/user/kiran/Mahout/20news-testing/part-m-00000</input>
+        	<output>/user/kiran/Mahout/20news-testing/out.txt</output>
+        	<predecessor>MahoutTestNaiveBayes</predecessor>
+        </job>-->
+    </workflow>
+</workflows>

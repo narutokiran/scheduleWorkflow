@@ -44,12 +44,60 @@ class WorkflowLookup
 	String status;
 	String jobName;
 	String jobType;
+	String seq2SparseWeight;
+	String testOutput;
+	String trainingOutput;
+	String randomSelectionPct;
+	String xm;
+	String MAHOUT_HOME;
 	Job clientJob;
+	Process process;
 	int inputPathsCount,predecessorCount,successorCount;
 	@SuppressWarnings("deprecation")
 	WorkflowLookup()throws IOException
 	{
+		MAHOUT_HOME=System.getenv("MAHOUT_HOME");
 		inputPathsCount=0;predecessorCount=0;successorCount=0;status="Initialize";clientJob=new Job(new Configuration());
+	}
+	void setTestOutput(String val)
+	{
+		this.testOutput=val;
+	}
+	String getTestOutput()
+	{
+		return this.testOutput;
+	}
+	void setTrainingOutput(String val)
+	{
+		this.trainingOutput=val;
+	}
+	String getTrainingOutput()
+	{
+		return this.trainingOutput;
+	}
+	void setRandomSelectionPct(String val)
+	{
+		this.randomSelectionPct=val;
+	}
+	String getRandomSelectionPct()
+	{
+		return this.randomSelectionPct;
+	}
+	void setXm(String val)
+	{
+		this.xm=val;
+	}
+	String getXm()
+	{
+		return this.xm;
+	}
+	void setseq2SparseWeight(String val)
+	{
+		this.seq2SparseWeight=val;
+	}
+	String getSeq2SparseWeight()
+	{
+		return this.seq2SparseWeight;
 	}
 	int getPredecessorCount()
 	{
@@ -173,9 +221,47 @@ class WorkflowLookup
 	{
 		return this.jobType;
 	}
+	boolean isRunning(Process process)throws Exception {
+    try {
+       int exitValue=process.exitValue();
+       if(exitValue!=0)
+       {
+       	System.out.println("Abnormal Termination");
+       	BufferedReader br=new BufferedReader(new InputStreamReader(process.getErrorStream()));
+       	String s;
+       	while((s=br.readLine())!=null)
+       		System.out.println(s);
+       	return false;
+       }
+        return false;
+    } catch (Exception e) {
+        return true;
+    }
+	}
 	void submitJob() throws IOException, ClassNotFoundException, InterruptedException
 	{
-		if(this.jobType.equals("HadoopMR"))
+		if(this.jobType.equals("MahoutSplit"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout split -i "+this.getInputPaths(0)+" --trainingOutput "+this.getTrainingOutput()+" --testOutput "+this.getTestOutput()+" --randomSelectionPct "+this.getRandomSelectionPct()+" --overwrite --sequenceFiles -xm "+this.getXm());
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("MahoutSeq2Sparse"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout seq2sparse -i "+this.getInputPaths(0)+" -o "+this.getOutputPath()+" -lnorm -nv -wt "+this.getSeq2SparseWeight());
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("MahoutSeqDirectory"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout seqdirectory -i "+this.getInputPaths(0)+" -o "+this.getOutputPath()+" -ow");
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("HadoopMR"))
 		{
 			this.clientJob.setJobName(this.getJobName());
 			this.clientJob.setJarByClass(this.getJobClass());
@@ -197,7 +283,59 @@ class WorkflowLookup
 	}
 	void parseXML(Node jobDetail) throws ClassNotFoundException, DOMException
 	{
-		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("HadoopMR"))
+		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutSplit"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setTrainingOutput(new String(jobElement.getElementsByTagName("trainingOutput").item(0).getTextContent()));
+			this.setTestOutput(new String(jobElement.getElementsByTagName("testOutput").item(0).getTextContent()));
+			this.setRandomSelectionPct(new String(jobElement.getElementsByTagName("randomSelectionPct").item(0).getTextContent()));
+			this.setXm(new String(jobElement.getElementsByTagName("xm").item(0).getTextContent()));
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutSeq2Sparse"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setseq2SparseWeight(new String(jobElement.getElementsByTagName("weight").item(0).getTextContent()));
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutSeqDirectory"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("HadoopMR"))
 		{
 			/* Parse XML and get the requirement value to run Hadoop jobs in the YARN cluster */
 			Element jobElement= (Element) jobDetail;
@@ -221,34 +359,34 @@ class WorkflowLookup
 			this.setOutputPath(new String(jobElement.getElementsByTagName("outputPath").item(0).getTextContent()));
 			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
 			predecessorSet=predecessorSet.trim();
-			//System.out.println(predecessorSet.isEmpty());
 			if(predecessorSet!=null && !predecessorSet.isEmpty())
 			{
 				String predecessors[]=predecessorSet.split(",");
-				//System.out.println(predecessors[0]);
 				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
 					this.setPredecessor(predecessors[predecessor]);
 			}
 		}
 	}
-	boolean isJobComplete() throws IOException
+	boolean isJobComplete() throws Exception
 	{
-		if(this.jobType.equals("HadoopMR") && !this.getJobStatus().equals("Initialize") && this.clientJob.isComplete())
+		if(this.jobType.equals("MahoutSplit") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			return true;
+		else if(this.jobType.equals("MahoutSeq2Sparse") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			return true;
+		else if(this.jobType.equals("MahoutSeqDirectory") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			return true;
+		else if(this.jobType.equals("HadoopMR") && !this.getJobStatus().equals("Initialize") && this.clientJob.isComplete())
 			return true;
 		return false;
 	}
 }
 
 public class submitWorkFlowInitialPhase {
-
-	private static String predecessorSet;
-
-	@SuppressWarnings({ "deprecation"})
 	public static void main(String args[])throws Exception
 	{
 		 try {
 			 
-				File fXmlFile = new File("workflow.xml");
+				File fXmlFile = new File("workflowMahout.xml");
 				DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
 				DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
 				Document doc = dBuilder.parse(fXmlFile);
@@ -267,7 +405,7 @@ public class submitWorkFlowInitialPhase {
 						Element workflowElement = (Element) workflowDetail;
 						String workflowName=new String(workflowElement.getElementsByTagName("workflowName").item(0).getTextContent());
 						NodeList jobs=workflowElement.getElementsByTagName("job");
-						System.out.println(workflowName+" has submitted to YARN cluster");
+						System.out.println("Workflow - "+workflowName+" has submitted to YARN cluster");
 						int jobLength=jobs.getLength();
 						WorkflowLookup jobLookUp[]=new WorkflowLookup[jobLength+2];
 						for(int job=0;job<jobLength;job++)
@@ -396,12 +534,18 @@ public class submitWorkFlowInitialPhase {
 									jobLookUp[jobIndex].submitJob();
 								}
 							}
-						}		
+						}
+						//if all jobs are not completed, then wait for those
+					    for(int job=0;job<jobLength;job++)
+					    {
+					    	jobLookUp[job].process.waitFor();
+					    }
+					    System.out.println("All jobs in the workflow - "+workflowName + " had completed");
 					}
 				}
 			    } catch (Exception e) {
 				e.printStackTrace();
 			    }
-	}
+			    	}
 }
 
