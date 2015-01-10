@@ -14,7 +14,7 @@
         	<output>/user/kiran/Mahout/20news-vectors</output>
         	<weight>tfidf</weight>
         	<predecessor></predecessor>
-        </job>-->
+        </job>
         <job type="MahoutSplit">
         	<jobName>MahoutDatasetSplit</jobName>
         	<input>/user/kiran/Mahout/20news-vectors/tfidf-vectors</input>
@@ -24,12 +24,12 @@
         	<xm>sequential</xm>
         	<predecessor></predecessor>
         </job>
-        <!--<job type="MahoutTrainNB">
+        <job type="MahoutTrainNB">
         	<jobName>MahoutTrainNaiveBayes</jobName>
         	<input>/user/kiran/Mahout/20news-train-vectors</input>
         	<output>/user/kiran/Mahout/model</output>
         	<labelIndex>/user/kiran/Mahout/labelindex</labelIndex>
-        	<predecessor>MahoutDatasetSplit</predecessor>
+        	<predecessor></predecessor>
         </job>
         <job type="MahoutTestNB">
         	<jobName>MahoutTestNaiveBayes</jobName>
@@ -37,13 +37,13 @@
         	<model>/user/kiran/Mahout/model</model>
         	<labelIndex>/user/kiran/Mahout/labelindex</labelIndex>
         	<output>/user/kiran/Mahout/20news-testing</output>
-        	<predecessor>MahoutTrainNaiveBayes</predecessor>
-        </job>
+        	<predecessor></predecessor>
+        </job>-->
         <job type="MahoutSeqDumper">
         	<jobName>MahoutSequenceDumper</jobName>
         	<input>/user/kiran/Mahout/20news-testing/part-m-00000</input>
         	<output>/user/kiran/Mahout/20news-testing/out.txt</output>
-        	<predecessor>MahoutTestNaiveBayes</predecessor>
-        </job>-->
+        	<predecessor></predecessor>
+        </job>
     </workflow>
 </workflows>

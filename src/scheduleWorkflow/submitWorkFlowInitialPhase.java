@@ -12,7 +12,7 @@ import org.w3c.dom.Element;
 import java.io.File;
 import java.io.IOException;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.conf.*;
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapred.*;
@@ -26,6 +26,8 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.io.*;
 import java.util.*;
 
@@ -49,15 +51,37 @@ class WorkflowLookup
 	String trainingOutput;
 	String randomSelectionPct;
 	String xm;
+	String labelIndexPath;
 	String MAHOUT_HOME;
+	String modelPath;
+	 URI url;
+	boolean afterJobCompletion;
 	Job clientJob;
 	Process process;
 	int inputPathsCount,predecessorCount,successorCount;
 	@SuppressWarnings("deprecation")
-	WorkflowLookup()throws IOException
+	WorkflowLookup()throws IOException, URISyntaxException
 	{
+		url=new URI("hdfs://localhost:9000");
+		afterJobCompletion=true;
 		MAHOUT_HOME=System.getenv("MAHOUT_HOME");
 		inputPathsCount=0;predecessorCount=0;successorCount=0;status="Initialize";clientJob=new Job(new Configuration());
+	}
+	void setModelPath(String val)
+	{
+		this.modelPath=val;
+	}
+	String getModelPath()
+	{
+		return this.modelPath;
+	}
+	void setLabelIndexPath(String val)
+	{
+		this.labelIndexPath=val;
+	}
+	String getLabelIndexPath()
+	{
+		return this.labelIndexPath;
 	}
 	void setTestOutput(String val)
 	{
@@ -240,7 +264,31 @@ class WorkflowLookup
 	}
 	void submitJob() throws IOException, ClassNotFoundException, InterruptedException
 	{
-		if(this.jobType.equals("MahoutSplit"))
+
+		if(this.jobType.equals("MahoutSeqDumper"))
+		{
+			this.setJobStatus("Submitted");
+			String filePathComponent[]=this.getOutputPath().split("/");
+			String fileOutputPath=this.MAHOUT_HOME+"/"+filePathComponent[filePathComponent.length-1];
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout seqdumper -i "+this.getInputPaths(0)+" -o "+fileOutputPath);
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("MahoutTestNB"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout testnb -i "+this.getInputPaths(0)+" -o "+this.getOutputPath()+" -l "+this.getLabelIndexPath()+" -m "+this.getModelPath()+" -ow -c");
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("MahoutTrainNB"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout trainnb -i "+this.getInputPaths(0)+" -el -o "+this.getOutputPath()+" -li "+this.getLabelIndexPath()+" -ow -c");
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("MahoutSplit"))
 		{
 			this.setJobStatus("Submitted");
 			//single input path - default it will be stroed in 0th index
@@ -283,7 +331,58 @@ class WorkflowLookup
 	}
 	void parseXML(Node jobDetail) throws ClassNotFoundException, DOMException
 	{
-		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutSplit"))
+		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutSeqDumper"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutTestNB"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+			this.setLabelIndexPath(new String(jobElement.getElementsByTagName("labelIndex").item(0).getTextContent()));
+			this.setModelPath(new String(jobElement.getElementsByTagName("model").item(0).getTextContent()));
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutTrainNB"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+			this.setLabelIndexPath(new String(jobElement.getElementsByTagName("labelIndex").item(0).getTextContent()));
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutSplit"))
 		{
 			Element jobElement=(Element) jobDetail;
 			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
@@ -369,15 +468,72 @@ class WorkflowLookup
 	}
 	boolean isJobComplete() throws Exception
 	{
-		if(this.jobType.equals("MahoutSplit") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
-			return true;
+		if(this.jobType.equals("MahoutSeqDumper") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			{
+				this.afterJobCompletion=false;
+				String filePathComponent[]=this.getOutputPath().split("/");
+				String localFilePath=this.MAHOUT_HOME+"/"+filePathComponent[filePathComponent.length-1];
+				FileSystem hdfs =FileSystem.get(this.url,new Configuration());
+				Path hdfsFilePath= new Path(this.getOutputPath());
+				//hdfs.copyFromLocalFile(new Path(localFilePath), hdfsFilePath);
+				//FileUtil.copy(new File(localFilePath),hdfs,hdfsFilePath,true,new Configuration());
+				hdfs.copyFromLocalFile(new Path(localFilePath),hdfsFilePath);
+				File file=new File(localFilePath);
+				if(!file.delete())
+					System.out.println("Problem in deleting a temporary file");
+				hdfs.close();
+				return true;
+			}
+		else if(this.jobType.equals("MahoutTestNB") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process)){
+				this.afterJobCompletion=false;
+				return true;
+		}
+		else if(this.jobType.equals("MahoutTrainNB") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			{
+				this.afterJobCompletion=false;
+				return true;
+			}
+		else if(this.jobType.equals("MahoutSplit") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			{
+				this.afterJobCompletion=false;
+				return true;
+			}
 		else if(this.jobType.equals("MahoutSeq2Sparse") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
-			return true;
+			{
+				this.afterJobCompletion=false;
+				return true;
+			}
 		else if(this.jobType.equals("MahoutSeqDirectory") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
-			return true;
+			{
+				this.afterJobCompletion=false;
+				return true;
+			}
 		else if(this.jobType.equals("HadoopMR") && !this.getJobStatus().equals("Initialize") && this.clientJob.isComplete())
-			return true;
+			{
+				this.afterJobCompletion=false;
+				return true;
+			}
 		return false;
+	}
+	void afterJob() throws Exception
+	{
+		if(this.afterJobCompletion)
+		{
+			if(this.jobType.equals("MahoutSeqDumper"))
+			{
+				String filePathComponent[]=this.getOutputPath().split("/");
+				String localFilePath=this.MAHOUT_HOME+"/"+filePathComponent[filePathComponent.length-1];
+				FileSystem hdfs =FileSystem.get(this.url,new Configuration());
+				Path hdfsFilePath= new Path(this.getOutputPath());
+				//hdfs.copyFromLocalFile(new Path(localFilePath), hdfsFilePath);
+				//FileUtil.copy(new File(localFilePath),hdfs,hdfsFilePath,true,new Configuration());
+				hdfs.copyFromLocalFile(new Path(localFilePath),hdfsFilePath);
+				File file=new File(localFilePath);
+				if(!file.delete())
+					System.out.println("Problem in deleting a temporary file");
+				hdfs.close();
+			}
+		}
 	}
 }
 
@@ -539,6 +695,7 @@ public class submitWorkFlowInitialPhase {
 					    for(int job=0;job<jobLength;job++)
 					    {
 					    	jobLookUp[job].process.waitFor();
+					    	jobLookUp[job].afterJob(); //Any work has to be done (copy, move files) after a job has completed.
 					    }
 					    System.out.println("All jobs in the workflow - "+workflowName + " had completed");
 					}
