@@ -2,18 +2,34 @@
 <workflows>
     <workflow>
         <workflowName>MahoutNaiveBayesClassification</workflowName>
-        <!--<job type="MahoutSeqDirectory">
+        <job type="MahoutSeqDirectory">
         	<jobName>MahoutSequenceDirectory</jobName>
         	<input>/user/kiran/Mahout/20news-bydate-train</input>
         	<output>/user/kiran/Mahout/20news-seq</output>
         	<predecessor></predecessor>
+        </job>
+        <job type="HadoopMR">
+            <jobName>WordCountSample</jobName>
+            <jobClass>test.WordCount</jobClass>
+            <mapperClass>test.WordCount$TokenizerMapper</mapperClass>
+           <combinerClass>test.WordCount$IntSumReducer</combinerClass>
+           <reducerClass>test.WordCount$IntSumReducer</reducerClass>
+           <outputKeyClass>org.apache.hadoop.io.Text</outputKeyClass>
+           <outputValueClass>org.apache.hadoop.io.IntWritable</outputValueClass>
+           <inputPaths>
+                    <input>
+                        <path>hdfs://localhost:9000/user/kiran/Mahout/20news-bydate-train/alt.atheism</path>
+                    </input>
+           </inputPaths>
+           <outputPath>hdfs://localhost:9000/user/kiran/Mahout/wordCountOutput</outputPath>
+           <predecessor></predecessor>
         </job>
        <job type="MahoutSeq2Sparse">
         	<jobName>MahoutSequence2Sparse</jobName>
         	<input>/user/kiran/Mahout/20news-seq</input>
         	<output>/user/kiran/Mahout/20news-vectors</output>
         	<weight>tfidf</weight>
-        	<predecessor></predecessor>
+        	<predecessor>MahoutSequenceDirectory</predecessor>
         </job>
         <job type="MahoutSplit">
         	<jobName>MahoutDatasetSplit</jobName>
@@ -22,14 +38,14 @@
         	<testOutput>/user/kiran/Mahout/20news-test-vectors</testOutput>
         	<randomSelectionPct>40</randomSelectionPct>
         	<xm>sequential</xm>
-        	<predecessor></predecessor>
+        	<predecessor>MahoutSequence2Sparse</predecessor>
         </job>
         <job type="MahoutTrainNB">
         	<jobName>MahoutTrainNaiveBayes</jobName>
         	<input>/user/kiran/Mahout/20news-train-vectors</input>
         	<output>/user/kiran/Mahout/model</output>
         	<labelIndex>/user/kiran/Mahout/labelindex</labelIndex>
-        	<predecessor></predecessor>
+        	<predecessor>MahoutDatasetSplit</predecessor>
         </job>
         <job type="MahoutTestNB">
         	<jobName>MahoutTestNaiveBayes</jobName>
@@ -37,13 +53,13 @@
         	<model>/user/kiran/Mahout/model</model>
         	<labelIndex>/user/kiran/Mahout/labelindex</labelIndex>
         	<output>/user/kiran/Mahout/20news-testing</output>
-        	<predecessor></predecessor>
-        </job>-->
+        	<predecessor>MahoutTrainNaiveBayes</predecessor>
+        </job>
         <job type="MahoutSeqDumper">
         	<jobName>MahoutSequenceDumper</jobName>
         	<input>/user/kiran/Mahout/20news-testing/part-m-00000</input>
         	<output>/user/kiran/Mahout/20news-testing/out.txt</output>
-        	<predecessor></predecessor>
+        	<predecessor>MahoutTestNaiveBayes</predecessor>
         </job>
     </workflow>
 </workflows>

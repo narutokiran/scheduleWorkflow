@@ -62,6 +62,7 @@ class WorkflowLookup
 	@SuppressWarnings("deprecation")
 	WorkflowLookup()throws IOException, URISyntaxException
 	{
+		process=null;
 		url=new URI("hdfs://localhost:9000");
 		afterJobCompletion=true;
 		MAHOUT_HOME=System.getenv("MAHOUT_HOME");
@@ -255,7 +256,6 @@ class WorkflowLookup
        	String s;
        	while((s=br.readLine())!=null)
        		System.out.println(s);
-       	return false;
        }
         return false;
     } catch (Exception e) {
@@ -470,50 +470,32 @@ class WorkflowLookup
 	{
 		if(this.jobType.equals("MahoutSeqDumper") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
-				this.afterJobCompletion=false;
-				String filePathComponent[]=this.getOutputPath().split("/");
-				String localFilePath=this.MAHOUT_HOME+"/"+filePathComponent[filePathComponent.length-1];
-				FileSystem hdfs =FileSystem.get(this.url,new Configuration());
-				Path hdfsFilePath= new Path(this.getOutputPath());
-				//hdfs.copyFromLocalFile(new Path(localFilePath), hdfsFilePath);
-				//FileUtil.copy(new File(localFilePath),hdfs,hdfsFilePath,true,new Configuration());
-				hdfs.copyFromLocalFile(new Path(localFilePath),hdfsFilePath);
-				File file=new File(localFilePath);
-				if(!file.delete())
-					System.out.println("Problem in deleting a temporary file");
-				hdfs.close();
-				return true;
+				return false;
 			}
 		else if(this.jobType.equals("MahoutTestNB") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process)){
-				this.afterJobCompletion=false;
-				return true;
+				return false;
 		}
 		else if(this.jobType.equals("MahoutTrainNB") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
-				this.afterJobCompletion=false;
-				return true;
+				return false;
 			}
 		else if(this.jobType.equals("MahoutSplit") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
-				this.afterJobCompletion=false;
-				return true;
+				return false;
 			}
 		else if(this.jobType.equals("MahoutSeq2Sparse") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
-				this.afterJobCompletion=false;
-				return true;
+				return false;
 			}
 		else if(this.jobType.equals("MahoutSeqDirectory") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
-				this.afterJobCompletion=false;
-				return true;
+				return false;
 			}
-		else if(this.jobType.equals("HadoopMR") && !this.getJobStatus().equals("Initialize") && this.clientJob.isComplete())
+		else if(this.jobType.equals("HadoopMR") && !this.getJobStatus().equals("Initialize") && !this.clientJob.isSuccessful())
 			{
-				this.afterJobCompletion=false;
-				return true;
+				return false;
 			}
-		return false;
+		return true;
 	}
 	void afterJob() throws Exception
 	{
@@ -525,13 +507,13 @@ class WorkflowLookup
 				String localFilePath=this.MAHOUT_HOME+"/"+filePathComponent[filePathComponent.length-1];
 				FileSystem hdfs =FileSystem.get(this.url,new Configuration());
 				Path hdfsFilePath= new Path(this.getOutputPath());
-				//hdfs.copyFromLocalFile(new Path(localFilePath), hdfsFilePath);
-				//FileUtil.copy(new File(localFilePath),hdfs,hdfsFilePath,true,new Configuration());
 				hdfs.copyFromLocalFile(new Path(localFilePath),hdfsFilePath);
 				File file=new File(localFilePath);
 				if(!file.delete())
 					System.out.println("Problem in deleting a temporary file");
 				hdfs.close();
+				//Set afterJobCompletion false so it will not call again when we check for predecessors.
+				this.afterJobCompletion=false;
 			}
 		}
 	}
@@ -542,7 +524,7 @@ public class submitWorkFlowInitialPhase {
 	{
 		 try {
 			 
-				File fXmlFile = new File("workflowMahout.xml");
+				File fXmlFile = new File("workflow.xml");
 				DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
 				DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
 				Document doc = dBuilder.parse(fXmlFile);
@@ -595,11 +577,9 @@ public class submitWorkFlowInitialPhase {
 						int rootJobCount=0;
 						for(int job=0;job<jobLength;job++)
 						{
-							//System.out.println(jobLookUp[job].getPredecessorCount());
 							if(jobLookUp[job].getPredecessorCount()==0)
 							{
 								rootJobs[rootJobCount++]=jobLookUp[job].getJobName();
-								//System.out.println(jobLookUp[job].getJobName());
 							}
 						}
 						
@@ -651,7 +631,6 @@ public class submitWorkFlowInitialPhase {
 								{
 									for(int predecessor=0;predecessor<jobLookUp[jobIndex].getPredecessorCount();predecessor++)
 									{
-										//System.out.println(predecessor+"-"+jobLookUp[jobIndex].getPredecessor(predecessor));
 										int predecessorIndex=-1;
 										/*find the predecessor job index of the current pending job */
 										for(int job=0;job<jobLength;job++)
@@ -659,14 +638,16 @@ public class submitWorkFlowInitialPhase {
 											if(jobLookUp[job].getJobName().equals(jobLookUp[jobIndex].getPredecessor(predecessor)))
 											{
 												predecessorIndex=job;
-												//System.out.println(jobIndex+"-"+predecessorIndex+"-"+jobLookUp[jobIndex].getPredecessorCount());
 												break;
 											}
 										}
 										if(predecessorIndex!=-1)
 										{
-											if(jobLookUp[predecessorIndex].isJobComplete())
+											//System.out.println(jobLookUp[predecessorIndex].getJobName());
+											if(jobLookUp[predecessorIndex].isJobComplete()){
 												jobLookUp[predecessorIndex].setJobStatus("Completed");
+												jobLookUp[predecessorIndex].afterJob();
+											}
 											/*check if all predecessors are submitted and completed */
 											else
 											{
@@ -694,7 +675,8 @@ public class submitWorkFlowInitialPhase {
 						//if all jobs are not completed, then wait for those
 					    for(int job=0;job<jobLength;job++)
 					    {
-					    	jobLookUp[job].process.waitFor();
+					    	if(jobLookUp[job].process!=null)
+					    		jobLookUp[job].process.waitFor();
 					    	jobLookUp[job].afterJob(); //Any work has to be done (copy, move files) after a job has completed.
 					    }
 					    System.out.println("All jobs in the workflow - "+workflowName + " had completed");
