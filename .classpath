@@ -145,5 +145,6 @@
 	<classpathentry kind="lib" path="/home/kiran/Desktop/hadoop-2.2.0/share/hadoop/common/hadoop-nfs-2.2.0.jar"/>
 	<classpathentry kind="lib" path="/home/kiran/Desktop/testWorkflow.jar"/>
 	<classpathentry kind="lib" path="/home/kiran/Desktop/mahout-master/examples/target/mahout-examples-1.0-SNAPSHOT-job.jar"/>
+	<classpathentry kind="lib" path="/home/kiran/Desktop/mahout-master/integration/target/mahout-integration-1.0-SNAPSHOT.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

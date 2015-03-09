@@ -1,9 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <workflows>
     <workflow>
-        <workflowName>MahoutNaiveBayesClassification</workflowName>
+        <workflowName>MahoutKMeansCluster</workflowName>
         
-       <job type="MahoutRandomForestDescribe">
+        <job type="MahoutClusterInputConversion">
+            <jobName>MahoutClusterInputConversion</jobName>
+            <input>/user/kiran/MahoutKmeansSynthetic/input</input>
+            <output>/user/kiran/MahoutKmeansSynthetic/convertedInput</output>
+            <vectorClass>org.apache.mahout.math.RandomAccessSparseVector</vectorClass>
+            <predecessor></predecessor>
+        </job>
+        <job type="MahoutKMeansCluster">
+            <jobName>MahoutKMeansCluster</jobName>
+            <input>/user/kiran/MahoutKmeansSynthetic/convertedInput</input>
+            <output>/user/kiran/MahoutKmeansSynthetic/input-kmeans</output>
+            <distanceMeasure>org.apache.mahout.common.distance.CosineDistanceMeasure</distanceMeasure>
+            <kPoints>3</kPoints>
+            <iterations>10</iterations>
+            <clusterPath>/user/kiran/MahoutKmeansSyntehtic/input-kmeans-cluster</clusterPath>
+            <predecessor>MahoutClusterInputConversion</predecessor>
+        </job>
+        <job type="MahoutSeqDumper">
+            <jobName>MahoutSequenceDumper</jobName>
+            <input>/user/kiran/MahoutKmeansSynthetic/input-kmeans/clusteredPoints/part-m-00000</input>
+            <output>/user/kiran/MahoutKmeansSynthetic/input-kmeans/cluster-points.txt</output>
+            <predecessor>MahoutKMeansCluster</predecessor>
+        </job>
+      <!-- <job type="MahoutRandomForestDescribe">
             <jobName>MahoutRandomForestDescribe</jobName>
             <input>/user/kiran/Mahout/KDDTrain+.arff</input>
             <output>/user/kiran/Mahout/KDDTrain+.info</output>
@@ -27,7 +50,7 @@
             <modelPath>/user/kiran/Mahout/nsl-forest</modelPath>
             <predecessor>MahoutBuildForest</predecessor>
         </job>
-       <!-- <job type="MahoutSeqDirectory">
+       <job type="MahoutSeqDirectory">
         	<jobName>MahoutSequenceDirectory</jobName>
         	<input>/user/kiran/Mahout/20news-bydate-train</input>
         	<output>/user/kiran/Mahout/20news-seq</output>

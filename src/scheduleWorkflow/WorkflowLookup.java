@@ -49,7 +49,7 @@ class WorkflowLookup
 	Job clientJob;
 	Process process;
 	int numTrees,selectedAttribute;
-	String describePath;
+	String describePath,vectorClass,iterations,kPoints,distanceMeasure,clusterPath;
 	int inputPathsCount,predecessorCount,successorCount;
 	@SuppressWarnings("deprecation")
 	WorkflowLookup()throws IOException, URISyntaxException
@@ -270,6 +270,46 @@ class WorkflowLookup
 	{
 		return this.selectedAttribute;
 	}
+	void setVectorClass(String val)
+	{
+		this.vectorClass=val;
+	}
+	String getVectorClass()
+	{
+		return this.vectorClass;
+	}
+	void setDistanceMeasure(String val)
+	{
+		this.distanceMeasure=val;
+	}
+	String getDistanceMeasure()
+	{
+		return this.distanceMeasure;
+	}
+	void setKPoints(String val)
+	{
+		this.kPoints=val;
+	}
+	String getKPoints()
+	{
+		return this.kPoints;
+	}
+	void setClusterPath(String val)
+	{
+		this.clusterPath=val;
+	}
+	String getClusterPath()
+	{
+		return this.clusterPath;
+	}
+	void setIterations(String val)
+	{
+		this.iterations=val;
+	}
+	String getIterations()
+	{
+		return this.iterations;
+	}
 	boolean isRunning(Process process)throws Exception {
     try {
        int exitValue=process.exitValue();
@@ -288,8 +328,23 @@ class WorkflowLookup
 	}
 	void submitJob() throws IOException, ClassNotFoundException, InterruptedException
 	{
+		if(this.jobType.equals("MahoutKMeansCluster"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout kmeans -i "+this.getInputPaths(0)+" -o "+this.getOutputPath()+" -dm "+this.getDistanceMeasure()+" -x "+this.getIterations()+" -k "+this.getKPoints()+" -ow --clustering -c "+this.getClusterPath());
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
 
-		if(this.jobType.equals("MahoutTestForest"))
+		else if(this.jobType.equals("MahoutClusterInputConversion"))
+		{
+			this.setJobStatus("Submitted");
+			//single input path - default it will be stroed in 0th index
+			this.process = Runtime.getRuntime().exec(this.MAHOUT_HOME+"/bin/mahout org.apache.mahout.clustering.conversion.InputDriver -i "+this.getInputPaths(0)+" -o "+this.getOutputPath()+" -v "+this.getVectorClass());
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+
+		else if(this.jobType.equals("MahoutTestForest"))
 		{
 			this.setJobStatus("Submitted");
 			//single input path - default it will be stroed in 0th index
@@ -376,6 +431,44 @@ class WorkflowLookup
 	}
 	void parseXML(Node jobDetail) throws ClassNotFoundException, DOMException
 	{
+		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutKMeansCluster"))
+		{
+				Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+			this.setDistanceMeasure(new String(jobElement.getElementsByTagName("distanceMeasure").item(0).getTextContent()));
+			this.setKPoints(new String(jobElement.getElementsByTagName("kPoints").item(0).getTextContent()));
+			this.setClusterPath(new String(jobElement.getElementsByTagName("clusterPath").item(0).getTextContent()));
+			this.setIterations(new String(jobElement.getElementsByTagName("iterations").item(0).getTextContent()));
+
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutClusterInputConversion"))
+		{
+				Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
+			// Single input path - value will be stored in 0th index.
+			this.setInputPaths(new String(jobElement.getElementsByTagName("input").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
+			this.setVectorClass(new String(jobElement.getElementsByTagName("vectorClass").item(0).getTextContent()));
+		}
 		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutTestForest"))
 		{
 			Element jobElement=(Element) jobDetail;
@@ -567,7 +660,17 @@ class WorkflowLookup
 	}
 	boolean isJobComplete() throws Exception
 	{
-		if(this.jobType.equals("MahoutTestForest") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+
+	
+		if(this.jobType.equals("MahoutKMeansCluster") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			{
+				return false;
+			}	
+		else if(this.jobType.equals("MahoutClusterInputConversion") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+			{
+				return false;
+			}	
+		else if(this.jobType.equals("MahoutTestForest") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
 				return false;
 			}
