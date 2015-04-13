@@ -1,9 +1,12 @@
 package scheduleWorkflow;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -20,6 +23,37 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import com.google.protobuf.ServiceException;
+
+
+class JavaThread extends Thread
+{
+	String arguments[];
+	String className;
+	Class javaClass;
+	JavaThread(String className, String arguments[]) throws ClassNotFoundException
+	{
+		this.arguments=arguments;
+		this.className=className;
+		javaClass=Class.forName(className);
+	}
+	public void run()
+	{
+		try {
+		      java.lang.reflect.Method mainMethod = javaClass.getDeclaredMethod("main", String[].class);
+		       // Make sure that the method is public and static
+		      int modifiers = mainMethod.getModifiers();
+		      if ( !( Modifier.isPublic( modifiers ) && Modifier.isStatic( modifiers ) ) ) {
+		        throw new ServiceException("The main method in class " + this.className  + " must be declared public and static.");
+		      }
+		     // Build the application args array
+		      mainMethod.invoke(null, new Object[] { arguments });
+
+		    } catch (Exception e) {
+		      e.printStackTrace();;
+		    }
+	}
+}
 class WorkflowLookup
 {
 	Class<? extends Mapper> mapperClass;
@@ -44,6 +78,8 @@ class WorkflowLookup
 	String MAHOUT_HOME;
 	String modelPath;
 	String describe;
+	String javaClassName,arguments[];
+	Thread thread;
 	URI url;
 	boolean afterJobCompletion;
 	Job clientJob;
@@ -328,7 +364,14 @@ class WorkflowLookup
 	}
 	void submitJob() throws IOException, ClassNotFoundException, InterruptedException
 	{
-		if(this.jobType.equals("MahoutKMeansCluster"))
+		if(this.jobType.equals("JavaClass"))
+		{
+			this.setJobStatus("Submitted");
+			thread=new JavaThread(this.javaClassName,this.arguments);
+			thread.start();
+			System.out.println("Submitted "+this.getJobName()+" job to the YARN cluster");
+		}
+		else if(this.jobType.equals("MahoutKMeansCluster"))
 		{
 			this.setJobStatus("Submitted");
 			//single input path - default it will be stroed in 0th index
@@ -431,7 +474,34 @@ class WorkflowLookup
 	}
 	void parseXML(Node jobDetail) throws ClassNotFoundException, DOMException
 	{
-		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutKMeansCluster"))
+		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("JavaClass"))
+		{
+			Element jobElement=(Element) jobDetail;
+			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));	
+			String predecessorSet = new String(jobElement.getElementsByTagName("predecessor").item(0).getTextContent());
+			predecessorSet=predecessorSet.trim();
+			if(predecessorSet!=null && !predecessorSet.isEmpty())
+			{
+				String predecessors[]=predecessorSet.split(",");
+				for(int predecessor=0;predecessor<predecessors.length;predecessor++)
+					this.setPredecessor(predecessors[predecessor]);
+			}
+			this.javaClassName = new String(jobElement.getElementsByTagName("javaClassName").item(0).getTextContent());
+			NodeList argumentsList=jobElement.getElementsByTagName("arguments");
+			Node argumentsListDetail=argumentsList.item(0);
+			Element argumentsListElement=(Element) argumentsListDetail;
+			NodeList argumentList=argumentsListElement.getElementsByTagName("argument");
+			int count=0;
+			arguments=new String[argumentList.getLength()];
+			for(int argument=0;argument<argumentList.getLength();argument++)
+			{
+				Node argumentvalueDetail=argumentList.item(argument);
+				Element argumentvalueElement=(Element) argumentvalueDetail;
+				arguments[count++]=new String(argumentvalueElement.getElementsByTagName("value").item(0).getTextContent());
+			}
+			
+		}
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutKMeansCluster"))
 		{
 				Element jobElement=(Element) jobDetail;
 			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
@@ -469,7 +539,7 @@ class WorkflowLookup
 			this.setOutputPath(new String(jobElement.getElementsByTagName("output").item(0).getTextContent()));
 			this.setVectorClass(new String(jobElement.getElementsByTagName("vectorClass").item(0).getTextContent()));
 		}
-		if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutTestForest"))
+		else if(jobDetail.getNodeType() == Node.ELEMENT_NODE && this.jobType.equals("MahoutTestForest"))
 		{
 			Element jobElement=(Element) jobDetail;
 			this.setJobName(new String(jobElement.getElementsByTagName("jobName").item(0).getTextContent()));
@@ -660,9 +730,16 @@ class WorkflowLookup
 	}
 	boolean isJobComplete() throws Exception
 	{
-
-	
-		if(this.jobType.equals("MahoutKMeansCluster") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
+		//System.out.println(this.getJobName());
+		if(this.jobType.equals("JavaClass") && !this.getJobStatus().equals("Initialize"))
+		{
+			//System.out.println(JavaClassName);
+			if(this.thread.isAlive())
+				return false;
+			else
+				return true;
+		}
+		else if(this.jobType.equals("MahoutKMeansCluster") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
 				return false;
 			}	
@@ -676,6 +753,7 @@ class WorkflowLookup
 			}
 		else if(this.jobType.equals("MahoutBuildForest") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
 			{
+				//System.out.println("hi");
 				return false;
 			}
 		else if(this.jobType.equals("MahoutRandomForestDescribe") && !this.getJobStatus().equals("Initialize") && this.isRunning(this.process))
@@ -733,8 +811,13 @@ class WorkflowLookup
 			{
 				BufferedReader br=new BufferedReader(new InputStreamReader(this.process.getErrorStream()));
        			String s;
+       			FileSystem hdfs =FileSystem.get(this.url,new Configuration());
+       			Path hdfsFilePath= new Path(this.getOutputPath()+"/out.txt");;
+       			BufferedWriter bw=new BufferedWriter(new OutputStreamWriter(hdfs.create(hdfsFilePath)));
        			while((s=br.readLine())!=null)
-       				System.out.println(s);
+       				bw.write(s+"\n");
+       			bw.close();
+       			hdfs.close();
 				this.afterJobCompletion=false;
 			}
 		}

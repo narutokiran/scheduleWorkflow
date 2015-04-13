@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflows>
+    <workflow>
+        <workflowName>MahoutKMeansCluster</workflowName>
+        
+    <job type="JavaClass">
+        <jobName>RemoveLabel</jobName>
+        <javaClassName>test.RemoveLabel</javaClassName>
+        <arguments>
+            <argument><value>hdfs://localhost:9000/user/kiran/Testing/NACRS_final_short4.txt</value></argument>
+            <argument><value>hdfs://localhost:9000/user/kiran/Testing/ClusterInput/input.txt</value></argument>
+        </arguments>
+        <predecessor></predecessor>
+      </job>
+    <job type="JavaClass">
+        <jobName>SplitData</jobName>
+        <javaClassName>test.DataSplit</javaClassName>
+        <arguments>
+            <argument>
+                <value>hdfs://localhost:9000/user/kiran/Testing/NACRS_final_short4.txt</value> 
+            </argument>
+            <argument>
+                <value>hdfs://localhost:9000/user/kiran/Testing/ClassificationInput/NACRS_train.txt</value>
+            </argument>
+            <argument>
+                <value>hdfs://localhost:9000/user/kiran/Testing/ClassificationInput/NACRS_test.txt</value>
+            </argument>
+        </arguments>
+        <predecessor></predecessor>
+      </job>
+      <job type="MahoutClusterInputConversion">
+            <jobName>MahoutClusterInputConversion</jobName>
+            <input>/user/kiran/Testing/ClusterInput/input.txt</input>
+            <output>/user/kiran/Testing/convertedInput</output>
+            <vectorClass>org.apache.mahout.math.RandomAccessSparseVector</vectorClass>
+            <predecessor>RemoveLabel</predecessor>
+        </job>
+        <job type="MahoutKMeansCluster">
+            <jobName>MahoutKMeansCluster</jobName>
+            <input>/user/kiran/Testing/convertedInput</input>
+            <output>/user/kiran/Testing/input-kmeans</output>
+            <distanceMeasure>org.apache.mahout.common.distance.CosineDistanceMeasure</distanceMeasure>
+            <kPoints>3</kPoints>
+            <iterations>100</iterations>
+            <clusterPath>/user/kiran/Testing/input-kmeans-cluster</clusterPath>
+            <predecessor>MahoutClusterInputConversion</predecessor>
+        </job>
+        <job type="MahoutSeqDumper">
+            <jobName>MahoutSequenceDumper</jobName>
+            <input>/user/kiran/Testing/input-kmeans/clusteredPoints/part-m-00000</input>
+            <output>/user/kiran/Testing/input-kmeans/cluster-points.txt</output>
+            <predecessor>MahoutKMeansCluster</predecessor>
+        </job>
+      <job type="MahoutRandomForestDescribe">
+            <jobName>MahoutRandomForestDescribe</jobName>
+            <input>/user/kiran/Testing/ClassificationInput/NACRS_train.txt</input>
+            <output>/user/kiran/Testing/ClassificationInput/NACRS_train.info</output>
+            <describe>18 N L N</describe>
+            <predecessor>SplitData</predecessor>
+        </job>
+        <job type="MahoutBuildForest">
+            <jobName>MahoutBuildForest</jobName>
+            <input>/user/kiran/Testing/ClassificationInput/NACRS_train.txt</input>
+            <output>/user/kiran/Testing/nsl-forest1</output>
+            <describePath>/user/kiran/Testing/ClassificationInput/NACRS_train.info</describePath>
+            <numTrees>100</numTrees>
+            <selectedAttribute>5</selectedAttribute>
+            <predecessor>MahoutRandomForestDescribe</predecessor>
+        </job>
+        <job type="MahoutTestForest">
+            <jobName>MahoutTestForest</jobName>
+            <input>/user/kiran/Testing/ClassificationInput/NACRS_test.txt</input>
+            <output>/user/kiran/Testing/predictions</output>
+            <describePath>/user/kiran/Testing/ClassificationInput/NACRS_train.info</describePath>
+            <modelPath>/user/kiran/Testing/nsl-forest1</modelPath>
+            <predecessor>MahoutBuildForest,SplitData</predecessor>
+        </job>
+    </workflow>
+</workflows>

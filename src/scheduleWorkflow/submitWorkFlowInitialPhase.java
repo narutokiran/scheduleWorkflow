@@ -8,7 +8,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Node;
 import org.w3c.dom.Element;
-
 import java.io.*;
 import java.util.ArrayList;
 public class submitWorkFlowInitialPhase {
@@ -16,7 +15,7 @@ public class submitWorkFlowInitialPhase {
 	{
 		 try {
 			 
-				File fXmlFile = new File("workflowMahout.xml");
+				File fXmlFile = new File("workflowExample.xml");
 				DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
 				DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
 				Document doc = dBuilder.parse(fXmlFile);
@@ -101,6 +100,7 @@ public class submitWorkFlowInitialPhase {
 								}
 								/*Submit a job to YARN cluster */
 								jobLookUp[jobIndex].submitJob();
+								System.out.println("Root Job "+jobLookUp[jobIndex].getJobName());
 							}
 						}
 						/*Submitting pending jobs to YARN cluster */
@@ -137,10 +137,11 @@ public class submitWorkFlowInitialPhase {
 										if(predecessorIndex!=-1)
 										{
 											//System.out.println(jobLookUp[predecessorIndex].getJobName());
-											if(jobLookUp[predecessorIndex].isJobComplete()){
+											if(jobLookUp[predecessorIndex].isJobComplete() && !jobLookUp[predecessorIndex].getJobStatus().equals("Initialize")){
+												System.out.println(jobLookUp[predecessorIndex].getJobName()+" is completed and its status was "+jobLookUp[predecessorIndex].getJobStatus());	
 												jobLookUp[predecessorIndex].setJobStatus("Completed");
 												jobLookUp[predecessorIndex].afterJob();
-											}
+												}
 											/*check if all predecessors are submitted and completed */
 											else
 											{
@@ -171,6 +172,8 @@ public class submitWorkFlowInitialPhase {
 					    	if(jobLookUp[job].process!=null)
 					    		jobLookUp[job].process.waitFor();
 					    	jobLookUp[job].afterJob(); //Any work has to be done (copy, move files) after a job has completed.
+					    	if(!jobLookUp[job].isJobComplete())
+					    		job--;
 					    }
 					    System.out.println("All jobs in the workflow - "+workflowName + " had completed");
 					}

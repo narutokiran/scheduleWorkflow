@@ -3,7 +3,17 @@
     <workflow>
         <workflowName>MahoutKMeansCluster</workflowName>
         
-        <job type="MahoutClusterInputConversion">
+      <job type="JavaClass">
+        <jobName>Java program to split the data</jobName>
+        <javaClassName>test.RemoveLabel</javaClassName>
+        <arguments>
+            <argument><value>hdfs://localhost:9000/user/kiran/Testing/NACRS_final_short4.txt</value></argument>
+            <argument><value>hdfs://localhost:9000/user/kiran/Testing/ClusterInput/input.txt</value></argument>
+        </arguments>
+        <predecessor></predecessor>
+      </job>
+
+       <!-- <job type="MahoutClusterInputConversion">
             <jobName>MahoutClusterInputConversion</jobName>
             <input>/user/kiran/MahoutKmeansSynthetic/input</input>
             <output>/user/kiran/MahoutKmeansSynthetic/convertedInput</output>
@@ -26,7 +36,7 @@
             <output>/user/kiran/MahoutKmeansSynthetic/input-kmeans/cluster-points.txt</output>
             <predecessor>MahoutKMeansCluster</predecessor>
         </job>
-      <!-- <job type="MahoutRandomForestDescribe">
+      <job type="MahoutRandomForestDescribe">
             <jobName>MahoutRandomForestDescribe</jobName>
             <input>/user/kiran/Mahout/KDDTrain+.arff</input>
             <output>/user/kiran/Mahout/KDDTrain+.info</output>
